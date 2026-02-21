@@ -26,7 +26,8 @@ import {
     EffectCube,
     EffectCoverflow,
     EffectFlip,
-    Parallax
+    Parallax,
+    Autoplay
 } from 'swiper/modules'
 
 const CARD_VERSION = '0.0.2'
@@ -258,6 +259,9 @@ export class SwiperCard extends LitElement implements LovelaceCard {
                     modules.push(EffectCards)
                     break
             }
+        }
+        if ('autoplay' in this.#parameters) {
+            modules.push(Autoplay)
         }
         Swiper.use(modules)
 
