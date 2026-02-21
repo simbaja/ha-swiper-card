@@ -316,10 +316,12 @@ export class SwiperCard extends LitElement implements LovelaceCard {
                 left: 0;
             }
             .swiper-slide {
-                pointer-events: none;
+                width: 100% !important;
+                height: 100% !important;
             }
-            .swiper-slide-active {
-                pointer-events: auto;
+            .swiper-slide.swiper-slide-active > * {
+                overflow: hidden;
+                transform: translateZ(1px) !important;
             }
             .swiper-cube-shadow,
             [class^="swiper-slide-shadow"],
@@ -489,9 +491,14 @@ export class SwiperCard extends LitElement implements LovelaceCard {
                 element.innerText = (e as any).message
             }
         }
-        element.className = 'swiper-slide'
+        element.style.setProperty('width', '100%', 'important')
+        element.style.setProperty('height', '100%', 'important')
+
+        const wrapper = document.createElement('div')
+        wrapper.className = 'swiper-slide'
+
         if (this._config && 'card_width' in this._config && this._config.card_width) {
-            element.style.width = this._config.card_width
+            wrapper.style.width = this._config.card_width
         }
         if (this.#hass) {
             if ('hass' in element) { element.hass = this.#hass }
@@ -500,13 +507,24 @@ export class SwiperCard extends LitElement implements LovelaceCard {
             'll-rebuild',
             (ev) => {
                 ev.stopPropagation()
-                void this.rebuildCard(element, cardConfig)
+                void this.rebuildCard(wrapper, cardConfig)
             },
             {
                 once: true
             }
         )
-        return element
+
+        Object.defineProperty(wrapper, 'hass', {
+            set: (hass) => {
+                if ('hass' in element) {
+                    (element as any).hass = hass
+                }
+            },
+            get: () => ('hass' in element ? (element as any).hass : undefined)
+        })
+
+        wrapper.appendChild(element)
+        return wrapper
     }
 
     private async rebuildCard (cardElToReplace: LovelaceCard | HTMLElement, config: LovelaceCardConfig): Promise<void> {
