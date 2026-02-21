@@ -30,7 +30,7 @@ import {
     Autoplay
 } from 'swiper/modules'
 
-const CARD_VERSION = '0.0.2'
+const CARD_VERSION = '2026.2.0'
 const HELPERS = (window as any).loadCardHelpers ? (window as any).loadCardHelpers() : Promise.reject(Error('swiper-card could not load card helpers'))
 
 // font-face extracted from swiper-bundle.css
