@@ -76,6 +76,8 @@ export interface SwiperCardConfig extends LovelaceCardConfig {
     reverse?: boolean
     start_card?: number
     reset_after?: number
+    grid_options?: any
+    aspect_ratio?: string
 }
 
 @customElement('swiper-card')
@@ -192,11 +194,25 @@ export class SwiperCard extends LitElement implements LovelaceCard {
             this.setRenderConfig(undefined)
         }
         this._config = config
-        this.#parameters = deepcopy(this._config.parameters) || {}
+
+        this.#parameters = Object.assign({ observer: true, observeParents: true, autoHeight: false }, deepcopy(this._config.parameters) || {})
         this._cards = []
+
+        if (this.#ro) {
+            this.#ro.disconnect()
+        }
+
         if (window.ResizeObserver) {
-            this.#ro = new ResizeObserver(() => {
-                this.#swiper?.update()
+            this.#ro = new ResizeObserver((entries) => {
+                let doUpdate = false
+                for (const entry of entries) {
+                    if (entry.target === this || this._cards?.includes(entry.target as HTMLElement)) {
+                        doUpdate = true
+                    }
+                }
+                if (doUpdate) {
+                    this.#swiper?.update()
+                }
             })
         }
 
@@ -253,9 +269,12 @@ export class SwiperCard extends LitElement implements LovelaceCard {
         if (this._config && this.#hass && this.#updated && !this.#loaded) {
             void this.initialLoad()
         } else {
-            // render template if any and start lsitening for re-renders
+            // render template if any and start listening for re-renders
             this.renderConfigTemplate()
             this.#swiper?.update()
+        }
+        if (this.#ro) {
+            this.#ro.observe(this)
         }
     }
 
@@ -279,7 +298,29 @@ export class SwiperCard extends LitElement implements LovelaceCard {
         return css`
             ${unsafeCSS(SwiperCSS)}
             :host {
+                display: block;
+                width: 100%;
+                min-width: 0;
+                position: relative;
                 --swiper-theme-color: var(--primary-color);
+            }
+            .swiper {
+                width: 100%;
+                height: 100%;
+                position: absolute;
+                top: 0;
+                left: 0;
+            }
+            .swiper-slide {
+                pointer-events: none;
+            }
+            .swiper-slide-active {
+                pointer-events: auto;
+            }
+            .swiper-cube-shadow,
+            [class^="swiper-slide-shadow"],
+            [class*=" swiper-slide-shadow-"] {
+                pointer-events: none !important;
             }
         `
     }
@@ -302,14 +343,20 @@ export class SwiperCard extends LitElement implements LovelaceCard {
             })()
             : undefined
 
+        const hasAspectRatio = !!this._config?.aspect_ratio
+        const containerStyle = hasAspectRatio ? `position: relative; width: 100%; aspect-ratio: ${this._config.aspect_ratio};` : 'position: relative; width: 100%;'
+        const swiperStyle = hasAspectRatio ? 'position: absolute; width: 100%; height: 100%; top: 0; left: 0;' : 'width: 100%; height: 100%;'
+
         return html`
             ${scriptTag}
-            <div class="swiper" dir="${rtl ? 'rtl' : 'ltr'}">
-                ${'background_html' in this._config && typeof this._config.background_html === 'string' ? unsafeStatic(this._config.background_html) : ''}
-                <div class="swiper-wrapper">${this._cards}</div>
-                ${'pagination' in this.#parameters ? html`<div class="swiper-pagination"></div>` : ''}
-                ${'navigation' in this.#parameters ? html`<div class="swiper-button-next"></div><div class="swiper-button-prev"></div>` : ''}
-                ${'scrollbar' in this.#parameters ? html`<div class="swiper-scrollbar"></div>` : ''}
+            <div class="swiper-container" style="${containerStyle}">
+                <div class="swiper" dir="${rtl ? 'rtl' : 'ltr'}" style="${swiperStyle}">
+                    ${'background_html' in this._config && typeof this._config.background_html === 'string' ? unsafeStatic(this._config.background_html) : ''}
+                    <div class="swiper-wrapper">${this._cards}</div>
+                    ${'pagination' in this.#parameters ? html`<div class="swiper-pagination"></div>` : ''}
+                    ${'navigation' in this.#parameters ? html`<div class="swiper-button-next"></div><div class="swiper-button-prev"></div>` : ''}
+                    ${'scrollbar' in this.#parameters ? html`<div class="swiper-scrollbar"></div>` : ''}
+                </div>
             </div>
             ${'style' in this._config ? html`<style>${this._config.style}</style>` : html``}
         `
@@ -392,12 +439,16 @@ export class SwiperCard extends LitElement implements LovelaceCard {
         )
 
         this._cards = await this.#cardPromises
-        const observer = this.#ro
-        if (observer) {
-            this._cards.forEach((card) => {
-                observer.observe(card)
-            })
+
+        if (this.#ro) {
+            this.#ro.observe(this)
+            if (this._cards) {
+                this._cards.forEach((card) => {
+                    if (card) this.#ro?.observe(card)
+                })
+            }
         }
+
         if (this.#swiper) {
             if (this._config && 'start_card' in this._config) {
                 let index = this._config.start_card ?? 0
@@ -435,8 +486,8 @@ export class SwiperCard extends LitElement implements LovelaceCard {
             }
         }
         element.className = 'swiper-slide'
-        if ('card_width' in (this._config ?? {})) {
-            element.style.width = this._config?.card_width
+        if (this._config && 'card_width' in this._config && this._config.card_width) {
+            element.style.width = this._config.card_width
         }
         if (this.#hass) {
             if ('hass' in element) { element.hass = this.#hass }
@@ -468,8 +519,10 @@ export class SwiperCard extends LitElement implements LovelaceCard {
         this._cards = (this._cards ?? []).map((curCardEl) =>
             curCardEl === cardElToReplace ? newCardEl : curCardEl
         )
-        this.#ro?.unobserve(cardElToReplace)
-        this.#ro?.observe(newCardEl)
+        if (this.#ro) {
+            this.#ro.unobserve(cardElToReplace)
+            this.#ro.observe(newCardEl)
+        }
         this.#swiper?.update()
     }
 
@@ -483,6 +536,10 @@ export class SwiperCard extends LitElement implements LovelaceCard {
         const results = await Promise.all(this._cards.map(async it => await computeCardSize(it)))
 
         return Math.max(...results)
+    }
+
+    getGridOptions (): Record<string, unknown> {
+        return this._config?.grid_options || {}
     }
 }
 

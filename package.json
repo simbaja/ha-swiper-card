@@ -31,6 +31,6 @@
     "custom-card-helpers": "^1.7.0",
     "deep-clone-simple": "^1.1.1",
     "lit": "^3.2.0",
-    "swiper": "^11.1.14"
+    "swiper": "latest"
   }
 }
